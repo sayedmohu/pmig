@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Invoice Generator</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
+          integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <style>
+    :root{
+      --ink:#222;
+      --muted:#555;
+      --line:#666;
+      --thin:#888;
+      --bg:#f4f6f8;
+    }
+
+    *, *::before, *::after{ box-sizing:border-box; }
+
+    body{
+      margin:0;
+      font-family:Arial, Helvetica, sans-serif;
+      color:var(--ink);
+      background:var(--bg);
+    }
+
+    /* ── Form UI ── */
+    .wrap{ max-width:900px; margin:24px auto; padding:0 16px; }
+    .panel{
+      background:#fff;
+      border:1px solid #ddd;
+      border-radius:10px;
+      padding:20px;
+    }
+    .panel h2{ margin:0 0 16px; font-size:18px; }
+    .grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .row{ margin-bottom:12px; }
+    .row.full{ grid-column:1 / -1; }
+    label{ display:block; font-size:13px; color:var(--muted); margin:0 0 4px; font-weight:500; }
+    input, textarea, select{
+      width:100%; padding:10px 12px;
+      border:1px solid #ccc; border-radius:8px;
+      font-size:14px; outline:none;
+    }
+    textarea{ resize:vertical; min-height:70px; }
+    .btns{ display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+    button{
+      cursor:pointer; border:1px solid #ccc; background:#fff;
+      padding:10px 16px; border-radius:10px; font-weight:600; font-size:14px;
+    }
+    button.primary{ background:#0066cc; color:#fff; border-color:#0066cc; }
+    @media(max-width:520px){ .grid{ grid-template-columns:1fr; } }
+
+    /* ── Hidden PDF container ── */
+    #invoice-container{
+      position:fixed;
+      left:0; top:0;
+      opacity:0;
+      pointer-events:none;
+      z-index:-1;
+    }
+
+    /* ── Invoice template ── */
+    .invoice{
+      width:190mm;
+      box-sizing:border-box;
+      margin:0;
+      background:#fff;
+      overflow:hidden;
+    }
+
+    .inv-inner{ padding:10px 10px 8px; }
+    .title{ text-align:center; font-weight:700; margin:6px 0 8px; font-size:18px; }
+
+    .box{ border:1px solid var(--line); }
+    .top-box{ margin:0 10px 10px; }
+    .company{ padding:10px; border-bottom:1px solid var(--line); }
+    .company .name{ font-weight:700; font-size:16px; margin-bottom:2px; }
+    .company .sub{ font-size:12px; color:var(--muted); line-height:1.3; }
+
+    .hdr-row{ display:grid; grid-template-columns:1fr 1fr; }
+    .hdr-cell{ border-right:1px solid var(--line); padding:8px 10px; min-height:82px; }
+    .hdr-cell:last-child{ border-right:0; }
+    .hdr-head{ font-weight:700; font-size:12px; margin-bottom:6px; }
+    .kv{
+      display:grid; grid-template-columns:auto 1fr;
+      gap:2px 8px; font-size:12px; line-height:1.25;
+    }
+    .kv div.key{ color:var(--muted); }
+
+    .tbl{
+      margin:0 10px 10px;
+      border:1px solid var(--line);
+      border-collapse:collapse;
+      width:calc(100% - 20px);
+      font-size:12px;
+    }
+    .tbl th, .tbl td{
+      border:1px solid var(--line);
+      padding:6px;
+      vertical-align:top;
+    }
+    .tbl th{ font-weight:700; text-align:center; }
+    .tbl td.num{ text-align:center; width:36px; }
+    .tbl td.qty{ text-align:center; width:80px; }
+    .tbl td.money, .tbl th.money{ text-align:right; width:110px; white-space:nowrap; }
+
+    .bottom{
+      margin:0 10px 10px;
+      display:grid;
+      grid-template-columns:1fr 280px;
+      gap:10px;
+    }
+    .left-stack .blk{
+      border:1px solid var(--line);
+      padding:8px 10px;
+      margin-bottom:10px;
+      min-height:60px;
+    }
+    .blk .head{ font-weight:700; font-size:12px; margin-bottom:6px; }
+    .blk .body{ font-size:12px; line-height:1.35; white-space:pre-wrap; }
+
+    .totals{ border:1px solid var(--line); font-size:12px; }
+    .totals .rowt{
+      display:grid;
+      grid-template-columns:1fr 14px 1fr;
+      border-bottom:1px solid var(--line);
+      padding:5px 8px;
+      align-items:center;
+    }
+    .totals .rowt:last-child{ border-bottom:0; }
+    .totals .colon{ text-align:center; }
+    .totals .val{ text-align:right; white-space:nowrap; }
+    .totals .words .val{ text-align:left; white-space:normal; }
+
+    /* ── Signature section ── */
+    .sig{
+      margin:0 10px 10px;
+      border:1px solid var(--line);
+      padding:10px;
+      min-height:110px;
+      font-size:12px;
+      display:flex;
+      flex-direction:column;
+      justify-content:flex-end;
+    }
+    .sig .bottom-sig{
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+    }
+    .sig .for{
+      width:200px;
+      text-align:left;
+    }
+    .sig .boxsig{
+      width:200px;
+      height:55px;
+      border:1px solid var(--thin);
+      margin-bottom:6px;
+    }
+    .sig .auth{ color:var(--muted); }
+
+    .muted{ color:var(--muted); }
+    .mono{ font-variant-numeric:tabular-nums; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h2>Invoice Generator</h2>
+
+      <div class="grid">
+        <div class="row full">
+          <label>Bill To (name)</label>
+          <input id="i_billName" value="Latheef J" />
+        </div>
+        <div class="row full">
+          <label>Bill To (address)</label>
+          <textarea id="i_billAddress">Thekke Kallith House, Kongal, Paravoor, Kollam</textarea>
+        </div>
+        <div class="row full">
+          <label>Contact No</label>
+          <input id="i_billContact" inputmode="numeric" value="9656720131" />
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:14px 0;">
+
+      <div class="grid">
+        <div class="row">
+          <label>Invoice No</label>
+          <input id="i_invoiceNo" value="PM/2025/786" />
+        </div>
+        <div class="row">
+          <label>Date</label>
+          <input id="i_invoiceDate" type="date" />
+        </div>
+        <div class="row">
+          <label>Item</label>
+          <input id="i_itemName" value="Room No: 5" />
+        </div>
+        <div class="row">
+          <label>Qty</label>
+          <input id="i_qty" type="number" min="0" step="1" value="1" />
+        </div>
+        <div class="row">
+          <label>Price / Unit (₹)</label>
+          <input id="i_rate" type="number" min="0" step="0.01" value="500" />
+        </div>
+        <div class="row">
+          <label>Payment mode</label>
+          <select id="i_paymentMode">
+            <option>Cash</option>
+            <option>UPI</option>
+            <option>Card</option>
+            <option>Bank Transfer</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Amount Received (₹)</label>
+          <input id="i_received" type="number" min="0" step="0.01" value="0" />
+        </div>
+        <div class="row full">
+          <label>Terms and conditions</label>
+          <input id="i_terms" value="Thank you for doing business with us." />
+        </div>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="btn_download">⬇ Download PDF </button>
+        <button id="btn_reset">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden invoice for PDF capture -->
+  <div id="invoice-container" aria-hidden="true">
+    <div class="invoice" id="pdf-element">
+
+      <div class="inv-inner">
+        <div class="title">Tax Invoice</div>
+      </div>
+
+      <div class="top-box box">
+        <div class="company">
+          <div class="name">PM Complex</div>
+          <div class="sub">
+            PM Complex,<br>
+	    Karal Chellappan Rd,<br>
+            Near Medical College Hospital,<br>
+            Vandadum P.O,<br>
+	    Alappuzha, Kerala<br>
+            Phone: <span class="mono">9495477425</span>,
+            <span class="mono">8714161483</span>,
+            <span class="mono">9746401407</span>
+          </div>
+        </div>
+
+        <div class="hdr-row">
+          <div class="hdr-cell">
+            <div class="hdr-head">Bill To:</div>
+            <div class="kv" style="grid-template-columns:1fr;">
+              <div id="o_billName" style="font-weight:700;"></div>
+              <div id="o_billAddress" class="muted"></div>
+              <div class="muted">Contact No: <span class="mono" id="o_billContact"></span></div>
+            </div>
+          </div>
+          <div class="hdr-cell">
+            <div class="hdr-head">Invoice Details:</div>
+            <div class="kv">
+              <div class="key">No:</div><div id="o_invoiceNo" class="mono"></div>
+              <div class="key">Date:</div><div id="o_invoiceDate" class="mono"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th style="width:36px;">#</th>
+            <th>Item Name</th>
+            <th style="width:80px;">Days</th>
+            <th class="money">Price / Unit (₹)</th>
+            <th class="money">Amount (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td>
+            <td id="o_itemName"></td>
+            <td class="qty mono" id="o_qty"></td>
+            <td class="money mono" id="o_rate"></td>
+            <td class="money mono" id="o_amount"></td>
+          </tr>
+          <tr>
+            <td class="num"></td>
+            <td style="font-weight:700;">Total</td>
+            <td class="qty mono" id="o_totalQty"></td>
+            <td class="money"></td>
+            <td class="money mono" id="o_total"></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="bottom">
+        <div class="left-stack">
+          <div class="blk">
+            <div class="head">Payment Mode:</div>
+            <div class="body" id="o_paymentMode"></div>
+          </div>
+          <div class="blk">
+            <div class="head">Terms And Conditions:</div>
+            <div class="body" id="o_terms"></div>
+          </div>
+        </div>
+
+        <div class="totals">
+          <div class="rowt">
+            <div>Sub Total</div><div class="colon">:</div><div class="val mono" id="o_subTotal"></div>
+          </div>
+          <div class="rowt">
+            <div>Total</div><div class="colon">:</div><div class="val mono" id="o_grandTotal"></div>
+          </div>
+          <div class="rowt words">
+            <div>Invoice Amount In Words</div><div class="colon">:</div><div class="val" id="o_words"></div>
+          </div>
+          <div class="rowt">
+            <div>Received</div><div class="colon">:</div><div class="val mono" id="o_received"></div>
+          </div>
+          <div class="rowt">
+            <div>Balance</div><div class="colon">:</div><div class="val mono" id="o_balance"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sig">
+        <div class="bottom-sig">
+          <div class="for">For PM Complex:</div>
+          <div class="boxsig"></div>
+          <div class="auth">Authorized Signatory</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const fmt = n => Number(n||0).toFixed(2);
+
+    function toDate(iso){
+      if(!iso) return "";
+      const [y,m,d] = iso.split("-");
+      return `${d}-${m}-${y}`;
+    }
+
+    function toWords(num){
+      num = Math.round(Number(num)||0);
+      if(!num) return "Zero Rupees only";
+      const a=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten",
+               "Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+      const b=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+      const two=n=>n<20?a[n]:b[Math.floor(n/10)]+(n%10?" "+a[n%10]:"");
+      const three=n=>{
+        const h=Math.floor(n/100),r=n%100;
+        return (h?a[h]+" Hundred":"")+(r?(h?" ":"")+two(r):"");
+      };
+      let n=num, parts=[];
+      const cr=Math.floor(n/10000000); n%=10000000;
+      const la=Math.floor(n/100000);   n%=100000;
+      const th=Math.floor(n/1000);     n%=1000;
+      if(cr) parts.push(three(cr)+" Crore");
+      if(la) parts.push(three(la)+" Lakh");
+      if(th) parts.push(three(th)+" Thousand");
+      if(n)  parts.push(three(n));
+      return parts.join(" ")+" Rupees only";
+    }
+
+    function sync(){
+      const qty      = Number($("i_qty").value||0);
+      const rate     = Number($("i_rate").value||0);
+      const amount   = qty * rate;
+      const received = Number($("i_received").value||0);
+      const balance  = amount - received;
+
+      $("o_billName").textContent    = $("i_billName").value.trim()||"—";
+      $("o_billAddress").textContent = $("i_billAddress").value.trim()||"—";
+      $("o_billContact").textContent = $("i_billContact").value.trim()||"—";
+      $("o_invoiceNo").textContent   = $("i_invoiceNo").value.trim()||"—";
+      $("o_invoiceDate").textContent = toDate($("i_invoiceDate").value)||"—";
+      $("o_itemName").textContent    = $("i_itemName").value.trim()||"—";
+      $("o_qty").textContent         = qty;
+      $("o_totalQty").textContent    = qty;
+      $("o_rate").textContent        = fmt(rate);
+      $("o_amount").textContent      = fmt(amount);
+      $("o_total").textContent       = fmt(amount);
+      $("o_subTotal").textContent    = "₹ "+fmt(amount);
+      $("o_grandTotal").textContent  = "₹ "+fmt(amount);
+      $("o_words").textContent       = toWords(amount);
+      $("o_paymentMode").textContent = $("i_paymentMode").value;
+      $("o_terms").textContent       = $("i_terms").value.trim()||"—";
+      $("o_received").textContent    = "₹ "+fmt(received);
+      $("o_balance").textContent     = "₹ "+fmt(balance);
+    }
+
+    async function downloadPDF(){
+      sync();
+      window.scrollTo(0, 0);
+
+      const container = $("invoice-container");
+      const el        = $("pdf-element");
+
+      container.style.zIndex  = "9999";
+      container.style.opacity = "0.001";
+
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+      const invoiceNo = $("i_invoiceNo").value.trim().replace(/\//g,"-");
+
+      await html2pdf()
+        .set({
+          margin:   [10, 10, 10, 10],
+          filename: `Invoice_${invoiceNo||"PM"}.pdf`,
+          image:    { type:"jpeg", quality:0.98 },
+          html2canvas:{
+            scale:           1.5,
+            useCORS:         true,
+            backgroundColor: "#ffffff",
+            scrollX:         0,
+            scrollY:         0
+          },
+          jsPDF:{ unit:"mm", format:"a4", orientation:"portrait" }
+        })
+        .from(el)
+        .save();
+
+      container.style.zIndex  = "";
+      container.style.opacity = "0";
+    }
+
+    $("btn_download").addEventListener("click", e => { e.preventDefault(); downloadPDF(); });
+    $("btn_reset").addEventListener("click",    e => { e.preventDefault(); location.reload(); });
+    $("i_invoiceDate").value = new Date().toISOString().split("T")[0];  
+
+    sync();
+  </script>
+</body>
+</html>
