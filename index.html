@@ -426,7 +426,7 @@
       await html2pdf()
         .set({
           margin:   [10, 10, 10, 10],
-          filename: `Invoice_${invoiceNo||"PM"}.pdf`,
+          filename: `${customerName}_Invoice.pdf`,
           image:    { type:"jpeg", quality:0.98 },
           html2canvas:{
             scale:           1.5,
@@ -452,4 +452,5 @@
   </script>
 </body>
 </html>
+
 
