@@ -421,7 +421,7 @@
 
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-      const invoiceNo = $("i_invoiceNo").value.trim().replace(/\//g,"-");
+      const customerName = $("i_billName").value.trim().replace(/[^a-zA-Z0-9]/g, "_") || "Customer";
 
       await html2pdf()
         .set({
@@ -452,3 +452,4 @@
   </script>
 </body>
 </html>
+
