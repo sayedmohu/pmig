@@ -251,10 +251,10 @@
           <div class="name">PM Complex</div>
           <div class="sub">
             PM Complex,<br>
-	    Karal Chellappan Rd,<br>
+            Karal Chellappan Rd,<br>
             Near Medical College Hospital,<br>
             Vandadum P.O,<br>
-	    Alappuzha, Kerala<br>
+            Alappuzha, Kerala<br>
             Phone: <span class="mono">9495477425</span>,
             <span class="mono">8714161483</span>,
             <span class="mono">9746401407</span>
@@ -427,15 +427,16 @@
         .set({
           margin:   [10, 10, 10, 10],
           filename: `${customerName}_Invoice.pdf`,
-          image:    { type:"jpeg", quality:0.98 },
-          html2canvas:{
-            scale:           1.5,
+          image:    { type: "png", quality: 1 },
+          html2canvas: {
+            scale:           Math.max(3, window.devicePixelRatio || 1),
             useCORS:         true,
             backgroundColor: "#ffffff",
+            letterRendering: true,
             scrollX:         0,
             scrollY:         0
           },
-          jsPDF:{ unit:"mm", format:"a4", orientation:"portrait" }
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
         })
         .from(el)
         .save();
@@ -446,12 +447,9 @@
 
     $("btn_download").addEventListener("click", e => { e.preventDefault(); downloadPDF(); });
     $("btn_reset").addEventListener("click",    e => { e.preventDefault(); location.reload(); });
-    $("i_invoiceDate").value = new Date().toISOString().split("T")[0];  
+    $("i_invoiceDate").value = new Date().toISOString().split("T")[0];
 
     sync();
   </script>
 </body>
 </html>
-
-
-
